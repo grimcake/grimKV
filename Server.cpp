@@ -5,12 +5,14 @@
 #include <functional>
 #include <string.h>
 #include "Server.h"
+#include "tools.h"
 
 using namespace std::placeholders;
 
 Server::Server(int port) :
     port_(port),
-    base_(new Reactor)
+    base_(new Reactor),
+    consHash_(0, 0)
 {
 
 }
@@ -74,15 +76,46 @@ void Server::acceptConn(int fd)
 void Server::readData(int fd)
 {
     auto pHandler = handleList_[fd];
-    int nbytes = read(fd, pHandler->buff(), MAX_BUFFLEN);
+    int nbytes = 0;
+    nbytes = read(fd, pHandler->buff(), MAX_BUFFLEN);
+
     if(nbytes > 0)
     {
         pHandler->buff()[nbytes] = 0;
-        printf("%s\n", pHandler->buff());
-        pHandler->setLen(nbytes);
-        pHandler->setWriteCallback(std::bind(&Server::sendData, this, _1));
-        pHandler->enableWrite();
-        base_->registerHandler(pHandler.get());
+        // printf("%s\n", pHandler->buff());
+        // 解析命令
+        vector<string> cmd;
+        split(pHandler->buff(), cmd, ' ');
+        if(cmd[0] == "DATANODE")
+        {
+            // 添加新的数据节点
+            addToDataServer(atoi(cmd[1].c_str()), fd);
+        }
+        else if(cmd[0] == "HEART")
+        {
+            // 接受心跳信息
+        }
+        else if(cmd[0] == "PUT")
+        {
+            // 计算key所在的的dataserver，将写请求转发给dataserver
+            cout << "PUT" << endl;
+            int data_server_index = consHash_.getServerIndex(cmd[1]);
+            int data_server_fd = dataServerList_[data_server_index];
+            cout<<pHandler->buff()<<" end"<<endl;
+            write(data_server_fd, pHandler->buff(), nbytes);
+        }
+        else if(cmd[0] == "GET")
+        {
+            // 计算key所在的dataserver，将读请求转发给dataserver
+        }
+        else {
+            // 由dataserver返回的结果
+            printf("%s\n", pHandler->buff());
+            pHandler->setLen(nbytes);
+            pHandler->setWriteCallback(std::bind(&Server::sendData, this, _1));
+            pHandler->enableWrite();
+            base_->registerHandler(pHandler.get());
+        }
     }
     else if(nbytes == 0)
     {
@@ -100,6 +133,7 @@ void Server::readData(int fd)
     }
     
 }
+
 
 void Server::sendData(int fd)
 {
@@ -119,4 +153,10 @@ void Server::sendData(int fd)
         handleList_.erase(fd);
     }
     
+}
+
+void Server::addToDataServer(int index, int fd)
+{
+    consHash_.addNewNode(index);
+    dataServerList_[index] = fd;
 }
