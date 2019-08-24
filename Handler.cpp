@@ -30,12 +30,12 @@ void Handler::handleEvent()
 
 void Handler::enableRead()
 {
-    events_ = EPOLLIN;
+    events_ = (EPOLLIN);
 }
 
 void Handler::enableWrite()
 {
-    events_ = EPOLLOUT;
+    events_ = (EPOLLOUT);
 }
 
 void Handler::enableAll()

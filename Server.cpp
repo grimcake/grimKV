@@ -82,7 +82,7 @@ void Server::readData(int fd)
     if(nbytes > 0)
     {
         pHandler->buff()[nbytes] = 0;
-        // printf("%s\n", pHandler->buff());
+        printf(" %s\n", pHandler->buff());
         // 解析命令
         vector<string> cmd;
         split(pHandler->buff(), cmd, ' ');
@@ -94,27 +94,49 @@ void Server::readData(int fd)
         else if(cmd[0] == "HEART")
         {
             // 接受心跳信息
+            //pHandler->setWriteCallback(std::bind(&Server::readData, this, _1));
+            //pHandler->enableRead();
+            //base_->registerHandler(pHandler.get());
         }
         else if(cmd[0] == "PUT")
         {
             // 计算key所在的的dataserver，将写请求转发给dataserver
-            cout << "PUT" << endl;
             int data_server_index = consHash_.getServerIndex(cmd[1]);
             int data_server_fd = dataServerList_[data_server_index];
-            cout<<pHandler->buff()<<" end"<<endl;
-            write(data_server_fd, pHandler->buff(), nbytes);
+            dataToClient_[data_server_fd] = fd;
+            cout<<pHandler->buff()<<endl;
+            //write(data_server_fd, pHandler->buff(), nbytes);
+
+            clientToData_[fd] = data_server_fd;
+            pHandler->setLen(nbytes);
+            pHandler->setWriteCallback(std::bind(&Server::sendToDataServer, this, _1));
+            pHandler->enableWrite();
+            base_->registerHandler(pHandler.get());
         }
         else if(cmd[0] == "GET")
         {
             // 计算key所在的dataserver，将读请求转发给dataserver
+            int data_server_index = consHash_.getServerIndex(cmd[1]);
+            int data_server_fd = dataServerList_[data_server_index];
+            dataToClient_[data_server_fd] = fd;
+            cout<<pHandler->buff()<<endl;
+            //write(data_server_fd, pHandler->buff(), nbytes);
+
+            clientToData_[fd] = data_server_fd;
+            pHandler->setLen(nbytes);
+            pHandler->setWriteCallback(std::bind(&Server::sendToDataServer, this, _1));
+            pHandler->enableWrite();
+            base_->registerHandler(pHandler.get());
         }
         else {
             // 由dataserver返回的结果
+            /*
             printf("%s\n", pHandler->buff());
             pHandler->setLen(nbytes);
             pHandler->setWriteCallback(std::bind(&Server::sendData, this, _1));
             pHandler->enableWrite();
-            base_->registerHandler(pHandler.get());
+            base_->registerHandler(pHandler.get());*/
+            write(dataToClient_[fd], pHandler->buff(), nbytes);
         }
     }
     else if(nbytes == 0)
@@ -132,6 +154,27 @@ void Server::readData(int fd)
         handleList_.erase(fd);
     }
     
+}
+
+
+
+void Server::sendToDataServer(int fd)
+{
+    auto pHandler = handleList_[fd];
+    int nbytes = write(clientToData_[fd], pHandler->buff(), pHandler->len());
+    if(nbytes > 0)
+    {
+        pHandler->setReadCallback(std::bind(&Server::readData, this, _1));
+        pHandler->enableRead();
+        base_->registerHandler(pHandler.get());
+    }
+    else
+    {
+        printf("write error\n");
+        ::close(fd);
+        base_->removeHandler(pHandler.get());
+        handleList_.erase(fd);
+    }
 }
 
 

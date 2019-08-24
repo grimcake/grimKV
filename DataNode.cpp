@@ -6,7 +6,9 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <vector>
 #include "./DataNode.h"
+#include "./tools.h"
 #include <iostream>
 using namespace std;
 
@@ -55,18 +57,43 @@ void DataNode::sendHeartInfo()
 void DataNode::dealServerCmd()
 {
     char cmd[20];
-    memset(cmd, 0, sizeof(cmd));
     while(true)
     {
         int nbytes = read(sock_fd_, cmd, 1024);
+        cout<<cmd<<endl;
         if(nbytes > 0 )
         {
             cmd[nbytes] = '\0';
             cout<<cmd<<endl;
         }
+        vector<string> buff;
+        split(cmd, buff, ' ');
         memset(cmd, 0, sizeof(cmd));
-        //strcpy(cmd, "fuck you");
-        //write(sock_fd_, cmd, 2);
+        
+        // 解析命令
+        if(buff[0] == "GET")
+        {
+            string value = cache_.get(buff[1]);
+            strcpy(cmd, value.c_str());
+        }
+        else if(buff[0] == "PUT")
+        {
+            cache_.put(buff[1], buff[2]);
+            strcpy(cmd, "SUCCESS");
+        }
+
+        write(sock_fd_, cmd, strlen(cmd));
     }
 }
+
+string DataNode::Get(string key)
+{
+
+}
+
+void DataNode::Put(string key, string value)
+{
+
+}
+
 
